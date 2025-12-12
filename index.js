@@ -2,11 +2,18 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-service-account.json");
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-// MongoDB connection URI
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.fez2prt.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -67,7 +74,7 @@ app.get("/latestbooks", async (req, res) => {
     // Place order
     app.post("/order", async (req, res) => {
       const orderData = req.body;
-      // Add default status fields
+     
       orderData.status = "pending";
       orderData.paymentStatus = "unpaid";
       orderData.orderedAt = new Date();
@@ -82,7 +89,7 @@ app.get("/latestbooks", async (req, res) => {
     });
 
   } finally {
-    // Do not close client, server keeps running
+    
   }
 }
 
