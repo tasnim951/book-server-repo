@@ -54,6 +54,58 @@ async function run() {
     const booksCollection = client.db("book-courier").collection("books");
     const ordersCollection = client.db("book-courier").collection("orders");
 
+
+
+// Add a book (protected for librarian/admin)
+app.post("/books", verifyToken, async (req, res) => {
+  const bookData = req.body;
+  const userEmail = req.user.email; // get email from Firebase token
+
+  try {
+    // Fetch user from DB
+    const user = await usersCollection.findOne({ email: userEmail });
+    if (!user) return res.status(404).send({ message: "User not found" });
+
+    // Only allow librarian or admin
+    if (user.role !== "librarian" && user.role !== "admin") {
+      return res.status(403).send({ message: "Forbidden: Only librarian/admin can add books" });
+    }
+
+    // Add metadata
+    bookData.addedAt = new Date();
+    bookData.addedBy = userEmail;
+
+    const result = await booksCollection.insertOne(bookData);
+    res.send({ 
+      success: true, 
+      message: "Book added successfully!", 
+      insertedId: result.insertedId 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to add book" });
+  }
+});
+
+
+
+
+const usersCollection = client.db("book-courier").collection("users");
+
+// Endpoint to get the logged-in user info (including role)
+app.get("/user", verifyToken, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const user = await usersCollection.findOne({ email });
+    if (!user) return res.status(404).send({ message: "User not found" });
+    res.send(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to fetch user info" });
+  }
+});
+
+
     // Get all books
     app.get("/allbooks", async (req, res) => {
       const books = await booksCollection.find({ status: "published" }).toArray();
