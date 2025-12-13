@@ -13,7 +13,6 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-
 const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.fez2prt.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -27,6 +26,25 @@ const client = new MongoClient(uri, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+         // JWT Verification Middleware
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).send({ message: "Unauthorized" });
+  }
+
+  const idToken = authHeader.split(" ")[1];
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    res.status(401).send({ message: "Unauthorized" });
+  }
+};
 
 async function run() {
   try {
@@ -55,26 +73,30 @@ async function run() {
       }
     });
 
-    
-app.get("/latestbooks", async (req, res) => {
-  try {
-    const latestBooks = await booksCollection
-      .find({ status: "published" })
-      .sort({ addedAt: -1 })  
-      .limit(6)
-      .toArray();
-    res.send(latestBooks);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Failed to fetch latest books" });
-  }
-});
+    // Get latest 6 books
+    app.get("/latestbooks", async (req, res) => {
+      try {
+        const latestBooks = await booksCollection
+          .find({ status: "published" })
+          .sort({ addedAt: -1 })  
+          .limit(6)
+          .toArray();
+        res.send(latestBooks);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to fetch latest books" });
+      }
+    });
 
-
-    // Place order
-    app.post("/order", async (req, res) => {
+    // Place order (protected)
+    app.post("/order", verifyToken, async (req, res) => {
       const orderData = req.body;
+
      
+      if (orderData.userEmail !== req.user.email) {
+        return res.status(403).send({ message: "Forbidden: Email mismatch" });
+      }
+
       orderData.status = "pending";
       orderData.paymentStatus = "unpaid";
       orderData.orderedAt = new Date();
@@ -84,7 +106,18 @@ app.get("/latestbooks", async (req, res) => {
         res.send({ insertedId: result.insertedId, message: "Order placed successfully!" });
       } catch (error) {
         console.error(error);
-        res.status(500).send({ message: "Failed to place order" });
+        res.status(500).send({ message: "Failed to place order!" });
+      }
+    });
+
+   
+    app.get("/myorders", verifyToken, async (req, res) => {
+      try {
+        const userOrders = await ordersCollection.find({ userEmail: req.user.email }).toArray();
+        res.send(userOrders);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to fetch orders!" });
       }
     });
 
