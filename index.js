@@ -75,6 +75,35 @@ res.send(user);
 
     });
 
+    app.get("/admin/users", verifyToken, async (req, res) => {
+  const requester = await usersCollection.findOne({ email: req.user.email });
+
+  if (!requester || requester.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const users = await usersCollection.find().toArray();
+  res.send(users);
+});
+
+app.patch("/admin/users/:id/role", verifyToken, async (req, res) => {
+  const requester = await usersCollection.findOne({ email: req.user.email });
+
+  if (!requester || requester.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const { role } = req.body;
+
+  await usersCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { role } }
+  );
+
+  res.send({ success: true });
+});
+
+
     /* ================= BOOKS ================= */
 
     // Public books
@@ -227,6 +256,8 @@ app.patch("/orders/:id/cancel", verifyToken, async (req, res) => {
         .toArray();
       res.send(orders);
     });
+
+    
 
   } finally {}
 }
