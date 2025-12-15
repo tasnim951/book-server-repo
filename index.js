@@ -321,22 +321,26 @@ async function run() {
 
     /* ================= INVOICES ================= */
 
-    app.get("/myinvoices", verifyToken, async (req, res) => {
-      const invoices = await ordersCollection
-        .find({
-          userEmail: req.user.email,
-          paymentStatus: "paid",
-        })
-        .project({
-          paymentId: 1,
-          amount: 1,
-          bookTitle: 1,
-          date: 1,
-        })
-        .toArray();
+  app.get("/myinvoices", verifyToken, async (req, res) => {
+  const orders = await ordersCollection
+    .find({ userEmail: req.user.email, paymentStatus: "paid" })
+    .toArray();
 
-      res.send(invoices);
-    });
+  const invoices = await Promise.all(
+    orders.map(async (order) => {
+      const book = await booksCollection.findOne({ _id: order.bookId });
+      return {
+        _id: order._id,
+        paymentId: order._id, 
+        bookTitle: book?.title || "Unknown",
+        amount: book?.price || 0,  
+        date: order.orderedAt,
+      };
+    })
+  );
+
+  res.send(invoices);
+});
 
   } finally {}
 }
