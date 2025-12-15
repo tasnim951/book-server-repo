@@ -60,53 +60,95 @@ async function run() {
     app.get("/user", verifyToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.user.email });
       if (!user) {
-  const newUser = {
-    name: req.user.name || "User",
-    email: req.user.email,
-    role: "user",
-    createdAt: new Date()
-  };
+        const newUser = {
+          name: req.user.name || "User",
+          email: req.user.email,
+          role: "user",
+          createdAt: new Date(),
+        };
 
-  await usersCollection.insertOne(newUser);
-  return res.send(newUser);
-}
+        await usersCollection.insertOne(newUser);
+        return res.send(newUser);
+      }
 
-res.send(user);
-
+      res.send(user);
     });
 
     app.get("/admin/users", verifyToken, async (req, res) => {
-  const requester = await usersCollection.findOne({ email: req.user.email });
+      const requester = await usersCollection.findOne({ email: req.user.email });
 
-  if (!requester || requester.role !== "admin") {
-    return res.status(403).send({ message: "Forbidden" });
-  }
+      if (!requester || requester.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
 
-  const users = await usersCollection.find().toArray();
-  res.send(users);
-});
+      const users = await usersCollection.find().toArray();
+      res.send(users);
+    });
 
-app.patch("/admin/users/:id/role", verifyToken, async (req, res) => {
-  const requester = await usersCollection.findOne({ email: req.user.email });
+    app.patch("/admin/users/:id/role", verifyToken, async (req, res) => {
+      const requester = await usersCollection.findOne({ email: req.user.email });
 
-  if (!requester || requester.role !== "admin") {
-    return res.status(403).send({ message: "Forbidden" });
-  }
+      if (!requester || requester.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
 
-  const { role } = req.body;
+      const { role } = req.body;
 
-  await usersCollection.updateOne(
-    { _id: new ObjectId(req.params.id) },
-    { $set: { role } }
-  );
+      await usersCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { role } }
+      );
 
-  res.send({ success: true });
-});
+      res.send({ success: true });
+    });
 
+    /* ================= ADMIN BOOKS ================= */
+
+    app.get("/admin/books", verifyToken, async (req, res) => {
+      const adminUser = await usersCollection.findOne({ email: req.user.email });
+
+      if (!adminUser || adminUser.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const books = await booksCollection.find().toArray();
+      res.send(books);
+    });
+
+    app.patch("/admin/books/:id/status", verifyToken, async (req, res) => {
+      const adminUser = await usersCollection.findOne({ email: req.user.email });
+
+      if (!adminUser || adminUser.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const { status } = req.body;
+
+      await booksCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { status } }
+      );
+
+      res.send({ success: true });
+    });
+
+    app.delete("/admin/books/:id", verifyToken, async (req, res) => {
+      const adminUser = await usersCollection.findOne({ email: req.user.email });
+
+      if (!adminUser || adminUser.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const bookId = new ObjectId(req.params.id);
+
+      await booksCollection.deleteOne({ _id: bookId });
+      await ordersCollection.deleteMany({ bookId });
+
+      res.send({ success: true });
+    });
 
     /* ================= BOOKS ================= */
 
-    // Public books
     app.get("/allbooks", async (req, res) => {
       const books = await booksCollection.find({ status: "published" }).toArray();
       res.send(books);
@@ -131,7 +173,6 @@ app.patch("/admin/users/:id/role", verifyToken, async (req, res) => {
 
     /* ================= LIBRARIAN ================= */
 
-    // Add book
     app.post("/books", verifyToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.user.email });
       if (!user || (user.role !== "librarian" && user.role !== "admin")) {
@@ -148,7 +189,6 @@ app.patch("/admin/users/:id/role", verifyToken, async (req, res) => {
       res.send({ success: true, insertedId: result.insertedId });
     });
 
-    // My Books
     app.get("/mybooks", verifyToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.user.email });
       if (!user || (user.role !== "librarian" && user.role !== "admin")) {
@@ -157,29 +197,26 @@ app.patch("/admin/users/:id/role", verifyToken, async (req, res) => {
 
       const books = await booksCollection.find({ addedBy: req.user.email }).toArray();
       res.send(books);
-
-// Update book (edit / publish-unpublish)
-app.patch("/books/:id", verifyToken, async (req, res) => {
-  const user = await usersCollection.findOne({ email: req.user.email });
-
-  if (!user || (user.role !== "librarian" && user.role !== "admin")) {
-    return res.status(403).send({ message: "Forbidden" });
-  }
-
-  const bookId = req.params.id;
-
-  await booksCollection.updateOne(
-    { _id: new ObjectId(bookId), addedBy: req.user.email },
-    { $set: req.body }
-  );
-
-  res.send({ success: true });
-});
-
-
     });
 
-    // Librarian Orders (✅ THIS WAS MISSING)
+    /* ✅ FIXED: Update book route (was nested before) */
+    app.patch("/books/:id", verifyToken, async (req, res) => {
+      const user = await usersCollection.findOne({ email: req.user.email });
+
+      if (!user || (user.role !== "librarian" && user.role !== "admin")) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      await booksCollection.updateOne(
+        { _id: new ObjectId(req.params.id), addedBy: req.user.email },
+        { $set: req.body }
+      );
+
+      res.send({ success: true });
+    });
+
+    /* ================= LIBRARIAN ORDERS ================= */
+
     app.get("/librarian/orders", verifyToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.user.email });
       if (!user || (user.role !== "librarian" && user.role !== "admin")) {
@@ -201,35 +238,34 @@ app.patch("/books/:id", verifyToken, async (req, res) => {
     });
 
     app.patch("/orders/:id/status", verifyToken, async (req, res) => {
-  const user = await usersCollection.findOne({ email: req.user.email });
-  if (!user || (user.role !== "librarian" && user.role !== "admin")) {
-    return res.status(403).send({ message: "Forbidden" });
-  }
+      const user = await usersCollection.findOne({ email: req.user.email });
+      if (!user || (user.role !== "librarian" && user.role !== "admin")) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
 
-  const { status } = req.body;
+      const { status } = req.body;
 
-  await ordersCollection.updateOne(
-    { _id: new ObjectId(req.params.id) },
-    { $set: { status } }
-  );
+      await ordersCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { status } }
+      );
 
-  res.send({ success: true });
-});
+      res.send({ success: true });
+    });
 
-app.patch("/orders/:id/cancel", verifyToken, async (req, res) => {
-  const user = await usersCollection.findOne({ email: req.user.email });
-  if (!user || (user.role !== "librarian" && user.role !== "admin")) {
-    return res.status(403).send({ message: "Forbidden" });
-  }
+    app.patch("/orders/:id/cancel", verifyToken, async (req, res) => {
+      const user = await usersCollection.findOne({ email: req.user.email });
+      if (!user || (user.role !== "librarian" && user.role !== "admin")) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
 
-  await ordersCollection.updateOne(
-    { _id: new ObjectId(req.params.id) },
-    { $set: { status: "cancelled" } }
-  );
+      await ordersCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { status: "cancelled" } }
+      );
 
-  res.send({ success: true });
-});
-
+      res.send({ success: true });
+    });
 
     /* ================= ORDERS ================= */
 
@@ -257,7 +293,50 @@ app.patch("/orders/:id/cancel", verifyToken, async (req, res) => {
       res.send(orders);
     });
 
-    
+    /* ================= PAY ORDER ================= */
+
+    app.patch("/orders/:id/pay", verifyToken, async (req, res) => {
+      const order = await ordersCollection.findOne({
+        _id: new ObjectId(req.params.id),
+        userEmail: req.user.email,
+      });
+
+      if (!order) {
+        return res.status(404).send({ message: "Order not found" });
+      }
+
+      await ordersCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        {
+          $set: {
+            paymentStatus: "paid",
+            paymentId: `PAY-${Date.now()}`,
+            date: new Date(),
+          },
+        }
+      );
+
+      res.send({ success: true });
+    });
+
+    /* ================= INVOICES ================= */
+
+    app.get("/myinvoices", verifyToken, async (req, res) => {
+      const invoices = await ordersCollection
+        .find({
+          userEmail: req.user.email,
+          paymentStatus: "paid",
+        })
+        .project({
+          paymentId: 1,
+          amount: 1,
+          bookTitle: 1,
+          date: 1,
+        })
+        .toArray();
+
+      res.send(invoices);
+    });
 
   } finally {}
 }
