@@ -128,6 +128,26 @@ res.send(user);
 
       const books = await booksCollection.find({ addedBy: req.user.email }).toArray();
       res.send(books);
+
+// Update book (edit / publish-unpublish)
+app.patch("/books/:id", verifyToken, async (req, res) => {
+  const user = await usersCollection.findOne({ email: req.user.email });
+
+  if (!user || (user.role !== "librarian" && user.role !== "admin")) {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const bookId = req.params.id;
+
+  await booksCollection.updateOne(
+    { _id: new ObjectId(bookId), addedBy: req.user.email },
+    { $set: req.body }
+  );
+
+  res.send({ success: true });
+});
+
+
     });
 
     // Librarian Orders (✅ THIS WAS MISSING)
