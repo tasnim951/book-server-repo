@@ -174,6 +174,48 @@ async function run() {
       res.send(book);
     });
 
+      /* ================= REVIEWS ================= */
+
+
+     app.post("/reviews", verifyToken, async (req, res) => {
+        const { bookId, rating, comment } = req.body;
+
+ 
+           const ordered = await ordersCollection.findOne({
+               bookId: new ObjectId(bookId),
+             userEmail: req.user.email,
+                  });
+
+          if (!ordered) {
+    return res.status(403).send({ message: "Order required to review" });
+    }
+
+   const review = {
+    bookId: new ObjectId(bookId),
+    userEmail: req.user.email,
+    userName: req.user.name || "User",
+    rating,
+    comment,
+    createdAt: new Date(),
+  };
+
+  await reviewsCollection.insertOne(review);
+  res.send({ success: true });
+});
+
+
+     app.get("/reviews", async (req, res) => {
+     const bookId = req.query.bookId;
+
+    const reviews = await reviewsCollection
+                 .find({ bookId: new ObjectId(bookId) })
+                          .sort({ createdAt: -1 })
+                            .toArray();
+
+                        res.send(reviews);
+                       });
+ 
+
     /* ================= LIBRARIAN ================= */
 
     app.post("/books", verifyToken, async (req, res) => {
@@ -298,11 +340,10 @@ async function run() {
 
     /* ================= WISHLIST ================= */
 
-// Add to wishlist
+
 app.post("/wishlist", verifyToken, async (req, res) => {
   const item = req.body;
 
-  // prevent duplicate wishlist
   const exists = await wishlistCollection.findOne({
     bookId: new ObjectId(item.bookId),
     userEmail: req.user.email,
@@ -314,9 +355,9 @@ app.post("/wishlist", verifyToken, async (req, res) => {
 
   await wishlistCollection.insertOne({
     bookId: new ObjectId(item.bookId),
-    bookTitle: item.bookTitle,
-    image: item.image,
-    price: item.price,
+    title: item.title,      
+    image: item.image,    
+    price: item.price,     
     userEmail: req.user.email,
     addedAt: new Date(),
   });
@@ -324,20 +365,21 @@ app.post("/wishlist", verifyToken, async (req, res) => {
   res.send({ success: true });
 });
 
-// Get my wishlist
-app.get("/wishlist", verifyToken, async (req, res) => {
-  const wishlist = await wishlistCollection
-    .find({ userEmail: req.user.email })
-    .toArray();
 
-  res.send(wishlist);
-});
 
-// Remove from wishlist
-app.delete("/wishlist/:id", verifyToken, async (req, res) => {
-  await wishlistCollection.deleteOne({
-    _id: new ObjectId(req.params.id),
-    userEmail: req.user.email,
+
+   app.get("/wishlist", verifyToken, async (req, res) => {
+     const wishlist = await wishlistCollection
+        .find({ userEmail: req.user.email })
+           .toArray();
+
+          res.send(wishlist);
+          });
+
+     app.delete("/wishlist/:id", verifyToken, async (req, res) => {
+         await wishlistCollection.deleteOne({
+         _id: new ObjectId(req.params.id),
+      userEmail: req.user.email,
   });
 
   res.send({ success: true });
