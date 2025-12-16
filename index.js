@@ -54,6 +54,9 @@ async function run() {
     const booksCollection = db.collection("books");
     const ordersCollection = db.collection("orders");
     const usersCollection = db.collection("users");
+    const wishlistCollection = db.collection("wishlist");
+    const reviewsCollection = db.collection("reviews");
+
 
     /* ================= USER ================= */
 
@@ -199,7 +202,7 @@ async function run() {
       res.send(books);
     });
 
-    /* ✅ FIXED: Update book route (was nested before) */
+    
     app.patch("/books/:id", verifyToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.user.email });
 
@@ -292,6 +295,54 @@ async function run() {
         .toArray();
       res.send(orders);
     });
+
+    /* ================= WISHLIST ================= */
+
+// Add to wishlist
+app.post("/wishlist", verifyToken, async (req, res) => {
+  const item = req.body;
+
+  // prevent duplicate wishlist
+  const exists = await wishlistCollection.findOne({
+    bookId: new ObjectId(item.bookId),
+    userEmail: req.user.email,
+  });
+
+  if (exists) {
+    return res.send({ message: "Already wishlisted" });
+  }
+
+  await wishlistCollection.insertOne({
+    bookId: new ObjectId(item.bookId),
+    bookTitle: item.bookTitle,
+    image: item.image,
+    price: item.price,
+    userEmail: req.user.email,
+    addedAt: new Date(),
+  });
+
+  res.send({ success: true });
+});
+
+// Get my wishlist
+app.get("/wishlist", verifyToken, async (req, res) => {
+  const wishlist = await wishlistCollection
+    .find({ userEmail: req.user.email })
+    .toArray();
+
+  res.send(wishlist);
+});
+
+// Remove from wishlist
+app.delete("/wishlist/:id", verifyToken, async (req, res) => {
+  await wishlistCollection.deleteOne({
+    _id: new ObjectId(req.params.id),
+    userEmail: req.user.email,
+  });
+
+  res.send({ success: true });
+});
+
 
     /* ================= PAY ORDER ================= */
 
