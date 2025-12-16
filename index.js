@@ -47,7 +47,7 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     console.log("Connected to MongoDB");
 
     const db = client.db("book-courier");
@@ -422,11 +422,20 @@ app.post("/wishlist", verifyToken, async (req, res) => {
   const invoices = await Promise.all(
     orders.map(async (order) => {
       const book = await booksCollection.findOne({ _id: order.bookId });
+
       return {
         _id: order._id,
-        paymentId: order._id, 
+        paymentId: order._id,
         bookTitle: book?.title || "Unknown",
-        amount: book?.price || 0,  
+        amount: (() => {
+          const price = book?.price;
+          const num = Number(
+            typeof price === "string"
+              ? price.replace(/[^0-9.]/g, "")
+              : price
+          );
+          return Number.isFinite(num) ? num : 0;
+        })(),
         date: order.orderedAt,
       };
     })
@@ -434,6 +443,7 @@ app.post("/wishlist", verifyToken, async (req, res) => {
 
   res.send(invoices);
 });
+
 
   } finally {}
 }
